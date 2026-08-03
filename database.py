@@ -42,8 +42,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fullname TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
-            phone TEXT NOT NULL,
-            address TEXT NOT NULL,
             password TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -135,21 +133,22 @@ def get_stats():
         'healthy': healthy,
         'critical': critical
     }
-def register_user(fullname, email, phone, address, password):
+def register_user(fullname, email, password, phone="Not provided", address="Not provided"):
     conn = get_db()
     cursor = conn.cursor()
 
     try:
         cursor.execute("""
             INSERT INTO users
-            (fullname,email,phone,address,password)
-            VALUES (?,?,?,?,?)
+            (fullname, email, phone, address, password)
+            VALUES (?, ?, ?, ?, ?)
         """, (fullname, email, phone, address, password))
 
         conn.commit()
         return True
 
-    except:
+    except Exception as e:
+        print("REGISTER ERROR:", e)
         return False
 
     finally:
@@ -168,6 +167,8 @@ def get_user_by_email(email):
     user = cursor.fetchone()
 
     conn.close()
+
+    return user
 
 def login_user(email, password):
     """

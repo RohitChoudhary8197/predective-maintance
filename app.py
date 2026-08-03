@@ -16,6 +16,7 @@ from flask import (
 )
  
 from database import (
+    get_db,
     init_db,
     save_prediction,
     get_predictions,
@@ -30,6 +31,7 @@ app.secret_key = os.environ.get(
     "SECRET_KEY",
     "predictive-maintenance-secret"
 )
+app.config["SESSION_PERMANENT"] = False
  
 BASE = os.path.dirname(os.path.abspath(__file__))
 MODEL = joblib.load(
@@ -137,35 +139,37 @@ def login_page():
  
 @app.route("/register", methods=["POST"])
 def register():
- 
-    fullname = request.form["fullname"]
-    email = request.form["email"]
-    phone = request.form["phone"]
-    address = request.form["address"]
-    password = request.form["password"]
-    confirm = request.form["confirm_password"]
- 
+
+    print("========== REGISTER REQUEST ==========")
+    print("FORM DATA:", request.form)
+
+    fullname = request.form.get("fullname")     
+    email = request.form.get("email")
+    password = request.form.get("password")
+    confirm = request.form.get("confirm_password")
+
+    print("Full Name :", fullname)
+    print("Email     :", email)
+
     if password != confirm:
- 
-        flash("Passwords do not match")
+        flash("Passwords do not match. Please try again.", "error")
         return redirect("/login")
- 
+
     existing = get_user_by_email(email)
- 
+
     if existing:
- 
-        flash("Email already registered")
+        flash("Email already registered. Please sign in or use another email.", "error")
         return redirect("/login")
- 
-    register_user(
-        fullname,
-        email,
-        phone,
-        address,
-        password
-    )
- 
-    flash("Registration successful")
+
+    success = register_user(fullname, email, password)
+
+    print("REGISTER RESULT:", success)
+
+    if not success:
+        flash("Registration failed. Please try again.", "error")
+        return redirect("/login")
+
+    flash("Registration successful. Please sign in.", "success")
     return redirect("/login")
  
  
@@ -185,7 +189,8 @@ def login():
 
     if user and user["password"] == password:
 
-        print("LOGIN SUCCESS")
+        session.clear()               # Purani session delete
+        session.permanent = False     # Browser session only
 
         session["user_id"] = user["id"]
         session["user_name"] = user["fullname"]
@@ -194,7 +199,7 @@ def login():
 
     print("LOGIN FAILED")
 
-    flash("Invalid Email or Password")
+    flash("Invalid email or password. Please try again.", "error")
     return redirect("/login")
  
  
@@ -204,9 +209,26 @@ def login():
  
 @app.route("/logout")
 def logout():
- 
+
     session.clear()
+
+    flash("Logged out successfully.", "success")
+
     return redirect("/login")
+
+@app.route("/users")
+def users():
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, fullname, email FROM users")
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return str([dict(x) for x in rows])
  
  
 # ==========================
@@ -218,15 +240,16 @@ def home():
 
     print("SESSION:", dict(session))
 
-    # if "user_id" not in session:
-    #     return redirect("/login")
+    # Login mandatory
+    if "user_id" not in session:
+        return redirect("/login")
 
     stats = get_stats()
 
     return render_template(
         "index.html",
         stats=stats,
-        username=session.get("user_name")
+        username=session["user_name"]
     )
  
  
