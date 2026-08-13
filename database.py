@@ -47,6 +47,13 @@ def init_db():
         )
     ''')
 
+    # Keep existing local databases compatible with the registration function.
+    columns = {row[1] for row in cursor.execute("PRAGMA table_info(users)")}
+    if "phone" not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+    if "address" not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN address TEXT")
+
     conn.commit()
     conn.close()
 
@@ -187,3 +194,67 @@ def login_user(email, password):
     conn.close()
 
     return user
+
+def save_streamlit_prediction(
+    engine_type,
+    health,
+    risk,
+    prob,
+    days,
+    rpm,
+    torque,
+    wear,
+    air_temp,
+    process_temp,
+    fail
+):
+    """Save a Streamlit prediction to the database."""
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            """
+            INSERT INTO predictions (
+                created_at,
+                engine_type,
+                health_score,
+                risk_level,
+                failure_prob,
+                safe_days,
+                rpm,
+                torque,
+                wear,
+                air_temp,
+                process_temp,
+                fail_prediction
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                engine_type,
+                int(health),
+                risk,
+                float(prob),
+                int(days),
+                float(rpm),
+                float(torque),
+                float(wear),
+                float(air_temp),
+                float(process_temp),
+                int(fail)
+            )
+        )
+
+        conn.commit()
+        return True
+
+    except Exception as e:
+        print("STREAMLIT SAVE ERROR:", e)
+        conn.rollback()
+        return False
+
+    finally:
+        conn.close()
